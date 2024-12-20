@@ -1,0 +1,17 @@
+[package]
+name = "cloudflare-ddns"
+version = "1.0.0"
+edition = "2021"
+authors = ["swarkin"]
+description = "Cloudflare DDNS updater"
+repository = "https://github.com/Swarkin/cloudflare-ddns"
+license = "MIT"
+keywords = ["cloudflare", "ddns"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = { version = "=3.0.0-rc2" }
+config = { version = "0.15.4", features = ["toml"] }
+dirs = "5.0.1"
+toml = "0.8"
