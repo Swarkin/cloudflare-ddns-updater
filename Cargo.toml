@@ -1,5 +1,5 @@
 [package]
-name = "cloudflare-ddns"
+name = "cloudflare-ddns-updater"
 version = "1.0.0"
 edition = "2021"
 authors = ["swarkin"]
@@ -15,3 +15,6 @@ ureq = { version = "=3.0.0-rc2" }
 config = { version = "0.15.4", features = ["toml"] }
 dirs = "5.0.1"
 toml = "0.8"
+
+[[bin]]
+name = "cloudflare-ddns-updater"
