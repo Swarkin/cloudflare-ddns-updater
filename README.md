@@ -2,7 +2,7 @@
 
 This is a very simple application that updates the Cloudflare DNS A records of your domain with your current global IPv4 address.
 
-It is recommended to use a service to restarts the program on a regular interval, for example `systemd` on Linux or `Task Scheduler` on Windows.
+It is recommended to use a service to restart the program on a regular interval, for example `systemd` on Linux or `Task Scheduler` on Windows.
 
 ---
 
