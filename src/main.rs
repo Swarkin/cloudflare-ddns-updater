@@ -5,7 +5,7 @@ use std::io::Write;
 use std::net::Ipv4Addr;
 use std::process::exit;
 use std::str::FromStr;
-use ureq::resolver::IpFamily;
+use ureq::config::IpFamily::Ipv4Only;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CloudflareDDNS {
@@ -105,10 +105,10 @@ fn main() {
 	}
 
 	let client: ureq::Agent = ureq::Agent::config_builder()
-		.user_agent(Some(String::from(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))))
+		.user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
 		.timeout_global(Some(std::time::Duration::from_secs(conf.http_timeout_s.unwrap())))
 		.https_only(true)
-		.ip_family(IpFamily::Ipv4Only)
+		.ip_family(Ipv4Only)
 		.build()
 		.into();
 

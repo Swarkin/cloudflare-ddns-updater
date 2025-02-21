@@ -1,20 +1,22 @@
 [package]
 name = "cloudflare-ddns-updater"
-version = "1.0.0"
-edition = "2021"
+version = "1.1.0"
+edition = "2024"
 authors = ["swarkin"]
-description = "Cloudflare DDNS updater"
-repository = "https://github.com/Swarkin/cloudflare-ddns"
+description = "tiny applet to update Cloudflare DNS A records for your domain"
+repository = "https://github.com/Swarkin/cloudflare-ddns-updater"
 license = "MIT"
 keywords = ["cloudflare", "ddns"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-ureq = { version = "=3.0.0-rc2" }
-config = { version = "0.15.4", features = ["toml"] }
-dirs = "5.0.1"
-toml = "0.8"
+ureq = { version = "3.0", features = ["rustls", "json"], default-features = false}
+config = { version = "0.15", features = ["toml"], default-features = false }
+dirs = "6.0"
+toml = { version = "0.8", features = ["display"], default-features = false }
 
-[[bin]]
-name = "cloudflare-ddns-updater"
+[profile.release]
+strip = true
+opt-level = "s"
+lto = true
