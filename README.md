@@ -1,6 +1,6 @@
 # Cloudflare DDNS updater
 
-This is a very simple application that updates the Cloudflare DNS A records of your domain with your current global IPv4 address.
+Tiny applet to update Cloudflare DNS A records for your domain.
 
 It is recommended to use a service to restart the program on a regular interval, for example `systemd` on Linux or `Task Scheduler` on Windows.
 
@@ -14,8 +14,8 @@ The configuration is stored using the `.toml` format in the OS-specific config d
 
 | OS | Path |
 | --- | --- |
-| Linux | `$HOME/.config/cloudflare-ddns/config.toml` |
-| Windows | `%APPDATA%/cloudflare-ddns/config.toml` |
+| Linux | `$HOME/.config/cloudflare-ddns-updater/config.toml` |
+| Windows | `%APPDATA%/cloudflare-ddns-updater/config.toml` |
 
 ### Entries
 
