@@ -19,7 +19,7 @@ struct CloudflareDDNS {
 impl Default for CloudflareDDNS {
 	fn default() -> Self {
 		Self {
-			ip_src: vec![String::from("https://ipv4.icanhazip.com/"), String::from("https://api.ipify.org")],
+			ip_src: vec!["https://ipv4.icanhazip.com/".into(), "https://api.ipify.org".into()],
 			auth_key: String::new(),
 			auth_email: String::new(),
 			zone_id: String::new(),
@@ -72,7 +72,7 @@ fn main() {
 	}
 
 	match Config::builder()
-		.set_default("ip_src", vec![String::from("https://ipv4.icanhazip.com/"), String::from("https://api.ipify.org")]).unwrap()
+		.set_default("ip_src", Vec::<String>::from(["https://ipv4.icanhazip.com".into(), "https://api.ipify.org".into()])).unwrap()
 		.set_default("http_timeout_s", Some(10)).unwrap()
 		.add_source(config::File::with_name(conf_path.to_str().unwrap()))
 		.add_source(config::Environment::with_prefix("CF"))
