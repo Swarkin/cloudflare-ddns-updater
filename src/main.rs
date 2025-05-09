@@ -7,22 +7,28 @@ use std::process::exit;
 use std::str::FromStr;
 use ureq::config::IpFamily::Ipv4Only;
 
+const DEFAULT_IPS: [&str; 2] = ["https://ipv4.icanhazip.com", "https://api.ipify.org"];
+
 #[derive(Debug, Serialize, Deserialize)]
 struct CloudflareDDNS {
-	ip_src: Vec<String>,
+	ip_src: Option<Vec<String>>,
 	auth_key: String,
 	auth_email: String,
 	zone_id: String,
+	patterns: Option<Vec<String>>,
+	invert_patterns: Option<bool>,
 	http_timeout_s: Option<u64>,
 }
 
 impl Default for CloudflareDDNS {
 	fn default() -> Self {
 		Self {
-			ip_src: vec!["https://ipv4.icanhazip.com/".into(), "https://api.ipify.org".into()],
-			auth_key: String::new(),
-			auth_email: String::new(),
-			zone_id: String::new(),
+			ip_src: Some(DEFAULT_IPS.into_iter().map(String::from).collect()),
+			auth_key: Default::default(),
+			auth_email: Default::default(),
+			zone_id: Default::default(),
+			patterns: None,
+			invert_patterns: None,
 			http_timeout_s: Some(10),
 		}
 	}
@@ -40,6 +46,7 @@ struct CloudflareDnsResponse<T> {
 struct CloudflareDnsRecord {
 	id: String,
 	r#type: String,
+	name: String,
 	#[serde(rename = "content")]
 	ip: Ipv4Addr,
 }
@@ -72,8 +79,8 @@ fn main() {
 	}
 
 	match Config::builder()
-		.set_default("ip_src", Vec::<String>::from(["https://ipv4.icanhazip.com".into(), "https://api.ipify.org".into()])).unwrap()
-		.set_default("http_timeout_s", Some(10)).unwrap()
+		.set_default("ip_src", DEFAULT_IPS.into_iter().map(String::from).collect::<Vec<_>>()).unwrap()
+		.set_default("http_timeout_s", 10).unwrap()
 		.add_source(config::File::with_name(conf_path.to_str().unwrap()))
 		.add_source(config::Environment::with_prefix("CF"))
 		.build()
@@ -114,7 +121,7 @@ fn main() {
 
 	println!("> getting external ipv4 address...");
 
-	let ipv4 = conf.ip_src.iter().find_map(|ip| {
+	let ipv4 = conf.ip_src.as_ref().unwrap().iter().find_map(|ip| {
 		print!("trying {ip}: ");
 
 		match client.get(ip).call() {
@@ -145,7 +152,7 @@ fn main() {
 		exit(1);
 	});
 
-	print!("{ipv4:?}\n> listing dns A records... ");
+	print!("{ipv4:?}\n> listing dns A-records... ");
 
 	match client.get(format!("https://api.cloudflare.com/client/v4/zones/{}/dns_records?type=A", conf.zone_id))
 		.header("X-Auth-Email", &conf.auth_email)
@@ -159,25 +166,45 @@ fn main() {
 						exit(1);
 					}
 
-					let mut a_records = vec![];
+					let mut a_records = resp.entries.iter()
+						.filter(|x| x.r#type == "A")
+						.collect::<Vec<_>>();
 
-					for entry in resp.entries {
-						if entry.r#type == "A" {
-							a_records.push(entry);
-						}
-					}
-
-					if a_records.is_empty() {
+					let total_records = a_records.len();
+					if total_records == 0 {
 						println!("none found");
 						exit(0);
 					}
 
-					println!("{} found\n> patching...", a_records.len());
+					if let Some(patterns) = conf.patterns.as_ref() {
+						let matchers = patterns.iter()
+							.map(|p| globset::Glob::new(p).expect("invalid pattern").compile_matcher())
+							.collect::<Vec<_>>();
+
+						a_records.retain(|x| {
+							let matched = matchers.iter().any(|m| m.is_match(&x.name));
+							if conf.invert_patterns.unwrap_or(true) { !matched } else { matched }
+						});
+					}
+
+					let filtered_records = a_records.len();
+					if filtered_records == 0 {
+						println!("all records were filtered");
+						exit(0);
+					}
+
+					print!("{} found", total_records);
+					if total_records > filtered_records {
+						print!(", {} filtered", total_records - filtered_records);
+					}
+
+					println!("\n> patching...", );
+
 					let mut errors = false;
 
 					for (i, record) in a_records.into_iter().enumerate() {
 						if record.ip == ipv4 {
-							println!("record {}: up to date", i + 1);
+							println!("record {} ({}): up to date", i + 1, record.name);
 							continue;
 						}
 						print!("record {}: ", i + 1);

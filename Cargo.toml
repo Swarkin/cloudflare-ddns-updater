@@ -1,6 +1,6 @@
 [package]
 name = "cloudflare-ddns-updater"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2024"
 authors = ["swarkin"]
 description = "tiny applet to update Cloudflare DNS A records for your domain"
@@ -13,8 +13,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ureq = { version = "3.0", features = ["rustls", "json"], default-features = false}
 config = { version = "0.15", features = ["toml"], default-features = false }
-dirs = "6.0"
 toml = { version = "0.8", features = ["display"], default-features = false }
+dirs = "6.0"
+globset = "0.4"
 
 [profile.release]
 strip = true
