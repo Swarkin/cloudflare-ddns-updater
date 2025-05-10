@@ -156,7 +156,6 @@ impl CloudflareDDNS {
 	}
 
 	fn get_current_ipv4(&self, client: &Agent) -> Ipv4Addr {
-		println!("> getting external ipv4 address...");
 		self.ip_src
 			.as_ref()
 			.unwrap()
@@ -193,18 +192,19 @@ impl CloudflareDDNS {
 	fn run(self) {
 		let client = self.get_client();
 
+		println!("> getting external ipv4 address...");
 		let current_ip = self.get_current_ipv4(&client);
 
-		let a_records = self.get_a_records(&client, &current_ip);
+		print!("{current_ip:?}\n> listing dns A-records... ");
+		let a_records = self.get_a_records(&client);
 
+		println!("\n> patching...",);
 		self.patch_records(&client, &current_ip, a_records);
 
 		println!("finished");
 	}
 
-	fn get_a_records(&self, client: &Agent, current_ip: &Ipv4Addr) -> Vec<CloudflareDnsRecord> {
-		print!("{current_ip:?}\n> listing dns A-records... ");
-
+	fn get_a_records(&self, client: &Agent) -> Vec<CloudflareDnsRecord> {
 		match client
 			.get(format!(
 				"https://api.cloudflare.com/client/v4/zones/{}/dns_records?type=A",
@@ -289,8 +289,6 @@ impl CloudflareDDNS {
 		current_ip: &Ipv4Addr,
 		a_records: Vec<CloudflareDnsRecord>,
 	) {
-		println!("\n> patching...",);
-
 		let mut errors = false;
 
 		for (i, record) in a_records.into_iter().enumerate() {
