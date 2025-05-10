@@ -35,7 +35,7 @@ impl Default for CloudflareDDNS {
     }
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 struct CloudflareDnsResponse<T> {
     success: bool,
     #[serde(rename = "result")]
@@ -43,7 +43,7 @@ struct CloudflareDnsResponse<T> {
     errors: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct CloudflareDnsRecord {
     id: String,
     r#type: String,
@@ -155,7 +155,7 @@ impl CloudflareDDNS {
             .into()
     }
 
-    fn get_ipv4(&self, client: &Agent) -> Ipv4Addr {
+    fn get_current_ipv4(&self, client: &Agent) -> Ipv4Addr {
         self.ip_src
             .as_ref()
             .unwrap()
@@ -194,9 +194,17 @@ impl CloudflareDDNS {
 
         println!("> getting external ipv4 address...");
 
-        let ipv4 = self.get_ipv4(&client);
+        let current_ip = self.get_current_ipv4(&client);
 
-        print!("{ipv4:?}\n> listing dns A-records... ");
+        let a_records = self.get_a_records(&client, &current_ip);
+
+        self.patch_records(&current_ip, &client, a_records);
+
+        println!("finished");
+    }
+
+    fn get_a_records(&self, client: &Agent, current_ip: &Ipv4Addr) -> Vec<CloudflareDnsRecord> {
+        print!("{current_ip:?}\n> listing dns A-records... ");
 
         match client
             .get(format!(
@@ -217,11 +225,11 @@ impl CloudflareDDNS {
                             println!("cloudflare api error(s):\n{}", resp.errors.join("\n"));
                             exit(1);
                         }
-
                         let mut a_records = resp
                             .entries
                             .iter()
                             .filter(|x| x.r#type == "A")
+                            .map(|x| x.to_owned())
                             .collect::<Vec<_>>();
 
                         let total_records = a_records.len();
@@ -261,53 +269,7 @@ impl CloudflareDDNS {
                             print!(", {} filtered", total_records - filtered_records);
                         }
 
-                        println!("\n> patching...",);
-
-                        let mut errors = false;
-
-                        for (i, record) in a_records.into_iter().enumerate() {
-                            if record.ip == ipv4 {
-                                println!("record {} ({}): up to date", i + 1, record.name);
-                                continue;
-                            }
-                            print!("record {}: ", i + 1);
-
-                            match client
-                                .patch(format!(
-                                    "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
-                                    self.zone_id, record.id
-                                ))
-                                .header("X-Auth-Email", &self.auth_email)
-                                .header("Authorization", format!("Bearer {}", self.auth_key))
-                                .send_json(json!({"content": ipv4.to_string()}))
-                            {
-                                Ok(resp) => {
-                                    if resp.status().is_success() {
-                                        println!("success");
-                                    } else {
-                                        let status = resp.status();
-                                        println!("failed (http {})", status);
-
-                                        let data = resp
-                                            .into_body()
-                                            .read_json::<CloudflareDnsResponse<()>>()
-                                            .unwrap_or_default();
-                                        if !data.errors.is_empty() {
-                                            println!("error(s):\n{}", data.errors.join("\n"));
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    println!("failed: {e}");
-                                    errors = true;
-                                }
-                            }
-                        }
-
-                        if errors {
-                            println!("finished with errors");
-                            exit(1);
-                        }
+                        return a_records;
                     }
                     Err(e) => {
                         println!("failed:\n{e}");
@@ -320,7 +282,60 @@ impl CloudflareDDNS {
                 exit(1);
             }
         }
+    }
 
-        println!("finished");
+    fn patch_records(
+        &self,
+        current_ip: &Ipv4Addr,
+        client: &Agent,
+        a_records: Vec<CloudflareDnsRecord>,
+    ) {
+        println!("\n> patching...",);
+
+        let mut errors = false;
+
+        for (i, record) in a_records.into_iter().enumerate() {
+            if record.ip == *current_ip {
+                println!("record {} ({}): up to date", i + 1, record.name);
+                continue;
+            }
+            print!("record {}: ", i + 1);
+
+            match client
+                .patch(format!(
+                    "https://api.cloudflare.com/client/v4/zones/{}/dns_records/{}",
+                    self.zone_id, record.id
+                ))
+                .header("X-Auth-Email", &self.auth_email)
+                .header("Authorization", format!("Bearer {}", self.auth_key))
+                .send_json(json!({"content": current_ip.to_string()}))
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        println!("success");
+                    } else {
+                        let status = resp.status();
+                        println!("failed (http {})", status);
+
+                        let data = resp
+                            .into_body()
+                            .read_json::<CloudflareDnsResponse<()>>()
+                            .unwrap_or_default();
+                        if !data.errors.is_empty() {
+                            println!("error(s):\n{}", data.errors.join("\n"));
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("failed: {e}");
+                    errors = true;
+                }
+            }
+        }
+
+        if errors {
+            println!("finished with errors");
+            exit(1);
+        }
     }
 }
