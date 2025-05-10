@@ -5,6 +5,7 @@ use std::io::Write;
 use std::net::Ipv4Addr;
 use std::process::exit;
 use std::str::FromStr;
+use ureq::Agent;
 use ureq::config::IpFamily::Ipv4Only;
 
 const DEFAULT_IPS: [&str; 2] = ["https://ipv4.icanhazip.com", "https://api.ipify.org"];
@@ -116,28 +117,30 @@ impl CloudflareDDNS {
             }
         }
 
-        /* detect missing config entries */
-        {
-            let mut missing = Vec::<&str>::new();
-            if conf.auth_key.is_empty() {
-                missing.push("auth_key");
-            }
-            if conf.auth_email.is_empty() {
-                missing.push("auth_email");
-            }
-            if conf.zone_id.is_empty() {
-                missing.push("zone_id");
-            }
-            if !missing.is_empty() {
-                println!("missing configuration entries: {}", missing.join(", "));
-                exit(1);
-            }
-        }
+        conf.check_missing();
+
         conf
     }
 
-    fn get_client(&self) -> ureq::Agent {
-        ureq::Agent::config_builder()
+    fn check_missing(&self) {
+        let mut missing = Vec::<&str>::new();
+        if self.auth_key.is_empty() {
+            missing.push("auth_key");
+        }
+        if self.auth_email.is_empty() {
+            missing.push("auth_email");
+        }
+        if self.zone_id.is_empty() {
+            missing.push("zone_id");
+        }
+        if !missing.is_empty() {
+            println!("missing configuration entries: {}", missing.join(", "));
+            exit(1);
+        }
+    }
+
+    fn get_client(&self) -> Agent {
+        Agent::config_builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
                 "/",
@@ -152,13 +155,8 @@ impl CloudflareDDNS {
             .into()
     }
 
-    fn run(self) {
-        let client = self.get_client();
-
-        println!("> getting external ipv4 address...");
-
-        let ipv4 = self
-            .ip_src
+    fn get_ipv4(&self, client: &Agent) -> Ipv4Addr {
+        self.ip_src
             .as_ref()
             .unwrap()
             .iter()
@@ -188,7 +186,15 @@ impl CloudflareDDNS {
             .unwrap_or_else(|| {
                 println!("could not determine external ip address");
                 exit(1);
-            });
+            })
+    }
+
+    fn run(self) {
+        let client = self.get_client();
+
+        println!("> getting external ipv4 address...");
+
+        let ipv4 = self.get_ipv4(&client);
 
         print!("{ipv4:?}\n> listing dns A-records... ");
 
