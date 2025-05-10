@@ -1,6 +1,7 @@
 use config::Config;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::error::Error;
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::process::exit;
@@ -59,6 +60,24 @@ fn main() {
 }
 
 impl CloudflareDDNS {
+	fn run(self) {
+		let client = self.get_client();
+
+		println!("> getting external ipv4 address...");
+		let current_ip = self.get_current_ipv4(&client);
+
+		print!("{current_ip:?}\n> listing dns A-records... ");
+		match self.get_a_records(&client) {
+			Ok(a_records) => {
+				println!("\n> patching...",);
+				self.patch_records(&client, &current_ip, a_records);
+
+				println!("finished");
+			}
+			Err(e) => println!("failed getting A records:\n{e}"),
+		}
+	}
+
 	fn get_from_config() -> Self {
 		let conf: CloudflareDDNS;
 		let conf_dir = dirs::config_dir().unwrap().join(env!("CARGO_PKG_NAME"));
@@ -178,89 +197,63 @@ impl CloudflareDDNS {
 			})
 	}
 
-	fn run(self) {
-		let client = self.get_client();
-
-		println!("> getting external ipv4 address...");
-		let current_ip = self.get_current_ipv4(&client);
-
-		print!("{current_ip:?}\n> listing dns A-records... ");
-		let a_records = self.get_a_records(&client);
-
-		println!("\n> patching...",);
-		self.patch_records(&client, &current_ip, a_records);
-
-		println!("finished");
-	}
-
-	fn get_a_records(&self, client: &Agent) -> Vec<CloudflareDnsRecord> {
-		match client
+	fn get_a_records(&self, client: &Agent) -> Result<Vec<CloudflareDnsRecord>, Box<dyn Error>> {
+		let resp = client
 			.get(format!(
 				"https://api.cloudflare.com/client/v4/zones/{}/dns_records?type=A",
 				self.zone_id
 			))
 			.header("X-Auth-Email", &self.auth_email)
 			.header("Authorization", format!("Bearer {}", self.auth_key))
-			.call()
-		{
-			Ok(resp) => match resp.into_body().read_json::<CloudflareDnsResponse<CloudflareDnsRecord>>() {
-				Ok(resp) => {
-					if !resp.success {
-						println!("cloudflare api error(s):\n{}", resp.errors.join("\n"));
-						exit(1);
-					}
-					let mut a_records = resp
-						.entries
-						.iter()
-						.filter(|x| x.r#type == "A")
-						.map(|x| x.to_owned())
-						.collect::<Vec<_>>();
+			.call()?;
 
-					let total_records = a_records.len();
-					if total_records == 0 {
-						println!("none found");
-						exit(0);
-					}
+		let resp = resp.into_body().read_json::<CloudflareDnsResponse<CloudflareDnsRecord>>()?;
 
-					if let Some(patterns) = self.patterns.as_ref() {
-						let matchers = patterns
-							.iter()
-							.map(|p| globset::Glob::new(p).expect("invalid pattern").compile_matcher())
-							.collect::<Vec<_>>();
-
-						a_records.retain(|x| {
-							let matched = matchers.iter().any(|m| m.is_match(&x.name));
-							if self.invert_patterns.unwrap_or(true) {
-								!matched
-							} else {
-								matched
-							}
-						});
-					}
-
-					let filtered_records = a_records.len();
-					if filtered_records == 0 {
-						println!("all records were filtered");
-						exit(0);
-					}
-
-					print!("{} found", total_records);
-					if total_records > filtered_records {
-						print!(", {} filtered", total_records - filtered_records);
-					}
-
-					return a_records;
-				}
-				Err(e) => {
-					println!("failed:\n{e}");
-					exit(1);
-				}
-			},
-			Err(e) => {
-				println!("failed:\n{e}");
-				exit(1);
-			}
+		if !resp.success {
+			println!("cloudflare api error(s):\n{}", resp.errors.join("\n"));
+			exit(1);
 		}
+		let mut a_records = resp
+			.entries
+			.iter()
+			.filter(|x| x.r#type == "A")
+			.map(|x| x.to_owned())
+			.collect::<Vec<_>>();
+
+		let total_records = a_records.len();
+		if total_records == 0 {
+			println!("none found");
+			exit(0);
+		}
+
+		if let Some(patterns) = self.patterns.as_ref() {
+			let matchers = patterns
+				.iter()
+				.map(|p| globset::Glob::new(p).expect("invalid pattern").compile_matcher())
+				.collect::<Vec<_>>();
+
+			a_records.retain(|x| {
+				let matched = matchers.iter().any(|m| m.is_match(&x.name));
+				if self.invert_patterns.unwrap_or(true) {
+					!matched
+				} else {
+					matched
+				}
+			});
+		}
+
+		let filtered_records = a_records.len();
+		if filtered_records == 0 {
+			println!("all records were filtered");
+			exit(0);
+		}
+
+		print!("{} found", total_records);
+		if total_records > filtered_records {
+			print!(", {} filtered", total_records - filtered_records);
+		}
+
+		return Ok(a_records);
 	}
 
 	fn patch_records(&self, client: &Agent, current_ip: &Ipv4Addr, a_records: Vec<CloudflareDnsRecord>) {
