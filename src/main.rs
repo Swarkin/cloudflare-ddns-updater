@@ -9,6 +9,7 @@ use ureq::Agent;
 use ureq::config::IpFamily::Ipv4Only;
 
 const DEFAULT_IPS: [&str; 2] = ["https://ipv4.icanhazip.com", "https://api.ipify.org"];
+const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Serialize, Deserialize)]
 struct CloudflareDDNS {
@@ -135,7 +136,7 @@ impl CloudflareDDNS {
 
 	fn get_client(&self) -> Agent {
 		Agent::config_builder()
-			.user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+			.user_agent(USER_AGENT)
 			.timeout_global(Some(std::time::Duration::from_secs(self.http_timeout_s.unwrap())))
 			.https_only(true)
 			.ip_family(Ipv4Only)
