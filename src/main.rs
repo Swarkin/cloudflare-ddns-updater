@@ -35,7 +35,7 @@ impl Default for CloudflareDDNS {
 	}
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct CloudflareDnsResponse<T> {
 	success: bool,
 	#[serde(rename = "result")]
