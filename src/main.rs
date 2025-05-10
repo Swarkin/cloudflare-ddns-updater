@@ -53,12 +53,12 @@ struct CloudflareDnsRecord {
 }
 
 fn main() {
-    let cddns = CloudflareDDNS::get_configured();
+    let cddns = CloudflareDDNS::get_from_config();
     cddns.run();
 }
 
 impl CloudflareDDNS {
-    fn get_configured() -> Self {
+    fn get_from_config() -> Self {
         let conf: CloudflareDDNS;
         let conf_dir = dirs::config_dir().unwrap().join(env!("CARGO_PKG_NAME"));
         let conf_path = conf_dir.join("config.toml");
@@ -156,6 +156,7 @@ impl CloudflareDDNS {
     }
 
     fn get_current_ipv4(&self, client: &Agent) -> Ipv4Addr {
+		println!("> getting external ipv4 address...");
         self.ip_src
             .as_ref()
             .unwrap()
@@ -192,13 +193,11 @@ impl CloudflareDDNS {
     fn run(self) {
         let client = self.get_client();
 
-        println!("> getting external ipv4 address...");
-
         let current_ip = self.get_current_ipv4(&client);
 
         let a_records = self.get_a_records(&client, &current_ip);
 
-        self.patch_records(&current_ip, &client, a_records);
+        self.patch_records(&client, &current_ip, a_records);
 
         println!("finished");
     }
@@ -286,8 +285,8 @@ impl CloudflareDDNS {
 
     fn patch_records(
         &self,
-        current_ip: &Ipv4Addr,
         client: &Agent,
+        current_ip: &Ipv4Addr,
         a_records: Vec<CloudflareDnsRecord>,
     ) {
         println!("\n> patching...",);
