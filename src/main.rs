@@ -74,7 +74,10 @@ impl CloudflareDDNS {
 
 				println!("finished");
 			}
-			Err(e) => println!("failed getting A records:\n{e}"),
+			Err(e) => {
+				println!("failed getting A records:\n{e}");
+				exit(1);
+			}
 		}
 	}
 
